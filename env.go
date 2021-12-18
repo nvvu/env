@@ -5,9 +5,13 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
 )
 
-const EnvTag = "env"
+const (
+	EnvTag    = "env"
+	Delimiter = ","
+)
 
 func OverwriteFromEnv(in interface{}) error {
 	v := reflect.ValueOf(in)
@@ -15,22 +19,28 @@ func OverwriteFromEnv(in interface{}) error {
 	if v.Kind() != reflect.Ptr {
 		return fmt.Errorf("input must be pointer")
 	}
-
 	v = v.Elem()
 
-	return inspect(v, "")
+	if v.Kind() != reflect.Struct {
+		return fmt.Errorf("input must be pointer to struct")
+	}
+	t := v.Type()
+
+	return traverse(v, t, "")
 }
 
-func inspect(v reflect.Value, tag reflect.StructTag) (err error) {
+func traverse(v reflect.Value, t reflect.Type, tag reflect.StructTag) (err error) {
 	if v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			v.Set(reflect.New(t.Elem()))
+		}
 		v = v.Elem()
+		t = v.Type()
 	}
-
-	t := v.Type()
 
 	if v.Kind() == reflect.Struct {
 		for i := 0; i < v.NumField(); i++ {
-			if err = inspect(v.Field(i), t.Field(i).Tag); err != nil {
+			if err = traverse(v.Field(i), t.Field(i).Type, t.Field(i).Tag); err != nil {
 				return err
 			}
 		}
@@ -43,15 +53,76 @@ func inspect(v reflect.Value, tag reflect.StructTag) (err error) {
 
 	if k, ok := tag.Lookup(EnvTag); ok {
 		if val := os.Getenv(k); val != "" {
-			return setPrimitiveType(v, val)
+			if v.Kind() == reflect.Slice {
+				if !isBasicType(t.Elem()) {
+					return fmt.Errorf("not supported type: %v", t)
+				}
+
+				return setSlice(v, val)
+			} else {
+				if !isBasicType(t) {
+					return fmt.Errorf("not supported type: %v", t)
+				}
+
+				return setBasicType(v, val)
+			}
 		}
 	}
 
 	return
 }
 
-func setPrimitiveType(v reflect.Value, val string) error {
+var basicTypes = []reflect.Kind{
+	reflect.Bool,
+	reflect.Int,
+	reflect.Int8,
+	reflect.Int16,
+	reflect.Int32,
+	reflect.Int64,
+	reflect.Uint,
+	reflect.Uint8,
+	reflect.Uint16,
+	reflect.Uint32,
+	reflect.Uint64,
+	reflect.Float32,
+	reflect.Float64,
+	reflect.String,
+}
+
+func isBasicType(t reflect.Type) bool {
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	for _, tt := range basicTypes {
+		if t.Kind() == tt {
+			return true
+		}
+	}
+
+	return false
+}
+
+func setSlice(v reflect.Value, val string) (err error) {
+	raws := strings.Split(val, ",")
+	ss := reflect.MakeSlice(v.Type(), len(raws), len(raws))
+	for i := 0; i < len(raws); i++ {
+		err = setBasicType(ss.Index(i), raws[i])
+		if err != nil {
+			return
+		}
+	}
+	v.Set(ss)
+	return
+}
+
+func setBasicType(v reflect.Value, val string) error {
 	switch v.Kind() {
+	case reflect.Ptr:
+		if v.IsNil() {
+			v.Set(reflect.New(v.Type().Elem()))
+		}
+		return setBasicType(v.Elem(), val)
 	case reflect.String:
 		v.SetString(val)
 	case reflect.Bool:
@@ -80,44 +151,4 @@ func setPrimitiveType(v reflect.Value, val string) error {
 		v.SetFloat(i)
 	}
 	return nil
-}
-
-func typeInfo(t reflect.Type) {
-	fmt.Println("type", t)
-	fmt.Println("> kind:", t.Kind().String())
-	fmt.Println("> comparable:", t.Comparable())
-	fmt.Println("> number of methods:", t.NumMethod())
-
-	if t.Kind() == reflect.Struct {
-		fmt.Println("> number of field:", t.NumField())
-		for i := 0; i < t.NumField(); i++ {
-			fmt.Println(">> field: ", i, t.Field(i), t.Field(i).Name)
-		}
-	}
-	fmt.Println("")
-}
-
-func valueInfo(t reflect.Value) {
-	fmt.Println("value", t, t.Type())
-	fmt.Println("> kind:", t.Kind().String())
-	fmt.Println("> can addresable:", t.CanAddr())
-	fmt.Println("> can set:", t.CanSet())
-	fmt.Println("> number of methods:", t.NumMethod())
-	fmt.Println(t.Type())
-
-	if t.Kind() == reflect.Struct {
-		fmt.Println("> number of field:", t.NumField())
-		for i := 0; i < t.NumField(); i++ {
-			vf := t.Field(i)
-
-			fmt.Println(">> field: ", i, vf, vf.Type())
-			fmt.Println(vf.CanSet(), vf.CanAddr())
-			if vf.Kind() == reflect.Struct {
-				valueInfo(vf)
-			}
-
-		}
-	}
-
-	fmt.Println("")
 }
