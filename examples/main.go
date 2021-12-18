@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 
@@ -9,29 +8,29 @@ import (
 )
 
 type Config struct {
-	Api        ApiServer
-	Username   string   `env:"AUTH_USER" yaml:"username"`
-	Password   string   `env:"AUTH_PASS" yaml:"password"`
-	Age        uint16   `env:"USER_AGE"`
-	KafkaHosts []string `env:"KAFKA_HOSTS"`
-	AA         []int    `env:"AA"`
+	HTTP   HTTP
+	Kafka  *Kafka
+	Secret string `env:"SECRET"`
 }
 
-type ApiServer struct {
-	Host string   `json:"addr" env:"API_SERVER_HOST"`
-	Port int      `json:"port" env:"API_SERVER_PORT"`
-	X    []string `env:"API_SERVER_X"`
+type HTTP struct {
+	Host string `env:"HOST"`
+	Port int    `env:"PORT"`
+}
+
+type Kafka struct {
+	Brokers []string `env:"KAFKA_BROKERS"`
+	Topic   string   `env:"KAFKA_TOPIC"`
+	Group   string   `env:"KAFKA_GROUP"`
 }
 
 func main() {
 	cfg := Config{}
 
-	fmt.Println(cfg.Api)
-
 	if err := env.OverwriteFromEnv(&cfg); err != nil {
 		log.Fatal(err)
 	}
 
-	d, _ := json.Marshal(cfg)
-	fmt.Println(string(d))
+	fmt.Println(cfg)
+	fmt.Println(cfg.Kafka)
 }
