@@ -10,6 +10,7 @@ import (
 
 const (
 	EnvTag    = "env"
+	PrefixTag = "env_prefix"
 	Delimiter = ","
 )
 
@@ -26,10 +27,10 @@ func OverwriteFromEnv(in interface{}) error {
 	}
 	t := v.Type()
 
-	return traverse(v, t, "")
+	return traverse(v, t, "", "")
 }
 
-func traverse(v reflect.Value, t reflect.Type, tag reflect.StructTag) (err error) {
+func traverse(v reflect.Value, t reflect.Type, tag reflect.StructTag, prefix string) (err error) {
 	if v.Kind() == reflect.Ptr {
 		if v.IsNil() {
 			v.Set(reflect.New(t.Elem()))
@@ -39,8 +40,9 @@ func traverse(v reflect.Value, t reflect.Type, tag reflect.StructTag) (err error
 	}
 
 	if v.Kind() == reflect.Struct {
+		prefix = tag.Get(PrefixTag)
 		for i := 0; i < v.NumField(); i++ {
-			if err = traverse(v.Field(i), t.Field(i).Type, t.Field(i).Tag); err != nil {
+			if err = traverse(v.Field(i), t.Field(i).Type, t.Field(i).Tag, prefix); err != nil {
 				return err
 			}
 		}
@@ -52,6 +54,7 @@ func traverse(v reflect.Value, t reflect.Type, tag reflect.StructTag) (err error
 	}
 
 	if k, ok := tag.Lookup(EnvTag); ok {
+		k = prefix + k
 		if val := os.Getenv(k); val != "" {
 			if v.Kind() == reflect.Slice {
 				if !isBasicType(t.Elem()) {

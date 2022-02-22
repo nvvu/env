@@ -8,9 +8,10 @@ import (
 )
 
 type Config struct {
-	HTTP   HTTP
-	Kafka  *Kafka
-	Secret string `env:"SECRET"`
+	HTTP        HTTP
+	Kafka       *Kafka
+	SecondKafka *Kafka `env_prefix:"SECOND_"`
+	Secret      string `env:"SECRET"`
 }
 
 type HTTP struct {
@@ -32,5 +33,6 @@ func main() {
 	}
 
 	fmt.Println(cfg)
-	fmt.Println(cfg.Kafka)
+	fmt.Println(cfg.Kafka.Topic)
+	fmt.Println(cfg.SecondKafka.Topic)
 }
