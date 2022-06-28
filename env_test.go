@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -50,4 +51,35 @@ func TestEnv(t *testing.T) {
 	require.Equal(t, "localhost", cfg.DB.Addr, "")
 	require.Equal(t, "9002", cfg.DB.Port, "")
 	require.Equal(t, 0, cfg.DB.MaxConn, "")
+}
+
+func TestEnvMap(t *testing.T) {
+	type Project struct {
+		Name string `env:"NAME"`
+		Addr string `env:"ADDR"`
+	}
+
+	type Config struct {
+		Projects map[string]*Project `env_prefix:"PROJECTS_"`
+	}
+
+	cfg := Config{
+		Projects: map[string]*Project{
+			"project1": {
+				Name: "Project 1",
+				Addr: "Addr 1",
+			},
+			"project2": {
+				Name: "Project 2",
+				Addr: "Addr 2",
+			},
+		},
+	}
+	os.Setenv("PROJECTS_project1_NAME", "project_111")
+	os.Setenv("PROJECTS_project2_ADDR", "addr_222")
+	err := OverwriteFromEnv(&cfg)
+	require.NoError(t, err, "")
+
+	assert.Equal(t, "project_111", cfg.Projects["project1"].Name)
+	assert.Equal(t, "addr_222", cfg.Projects["project2"].Addr)
 }

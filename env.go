@@ -40,9 +40,25 @@ func traverse(v reflect.Value, t reflect.Type, tag reflect.StructTag, prefix str
 	}
 
 	if v.Kind() == reflect.Struct {
-		prefix = tag.Get(PrefixTag)
+		prefix = prefix + tag.Get(PrefixTag)
 		for i := 0; i < v.NumField(); i++ {
 			if err = traverse(v.Field(i), t.Field(i).Type, t.Field(i).Tag, prefix); err != nil {
+				return err
+			}
+		}
+		return
+	}
+
+	if v.Kind() == reflect.Map {
+		prefix = tag.Get(PrefixTag)
+		if t.Key().Kind() != reflect.String {
+			return fmt.Errorf("only support map with string key")
+		}
+
+		for _, i := range v.MapKeys() {
+			mv := v.MapIndex(i)
+
+			if err = traverse(mv, mv.Type(), "", fmt.Sprintf("%s%s_", prefix, i.String())); err != nil {
 				return err
 			}
 		}
